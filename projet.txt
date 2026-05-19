@@ -1,0 +1,74 @@
+Chat temps réel avec WebSocket
+Technologies:
+- API REST (FastAPI)
+- WebSocket
+- Authentification JWT
+- Base de données (MySql)
+
+
+Fonctionnalités principales
+Authentification des utilisateurs
+Création de salons de discussion
+Envoi de messages dans un salon
+Récupération de l’historique des messages
+Messages privés entre utilisateurs
+Suppression/modification de messages
+Gestion des utilisateurs d’un salon
+Notifications d’événements (join/leave/message)
+Persistance des données en base
+
+Endpoints REST
+Authentification
+POST /auth/register
+POST /auth/login
+POST /auth/logout
+
+Utilisateurs
+GET /users
+GET /users/{id}
+
+Salons de discussion
+POST /rooms
+GET /rooms
+GET /rooms/{id}
+DELETE /rooms/{id}
+
+Gestion des membres d’un salon
+POST /rooms/{id}/join
+POST /rooms/{id}/leave
+GET /rooms/{id}/members
+
+Messages
+POST /messages
+GET /messages
+GET /rooms/{id}/messages
+PUT /messages/{id}
+DELETE /messages/{id}
+Messages privés
+POST /private-messages
+GET /private-messages/{user_id}
+
+Endpoint WebSocket
+Chat temps réel
+ws://localhost:8000/ws
+
+ou par salon :
+
+ws://localhost:8000/ws/rooms/{room_id}
+Événements WebSocket
+Envoi message
+{
+  "event": "message",
+  "room_id": 1,
+  "content": "Bonjour"
+}
+Notification entrée salon
+{
+  "event": "join_room"
+}
+Message privé
+{
+  "event": "private_message",
+  "receiver_id": 2,
+  "content": "Salut"
+}
