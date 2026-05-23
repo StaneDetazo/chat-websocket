@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # Configuration générale de l'application
-    APP_NAME: str = "Chat WebSocket API"
+    APP_NAME: str = "WoChat"
     DEBUG: bool = True
 
     # Configuration de la base de données

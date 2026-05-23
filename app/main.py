@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from app.api.endpoints import users, rooms
 from app.config import settings
 from app.database import init_db
 
@@ -8,7 +9,7 @@ async def lifespan(app: FastAPI):
     # Action au démarrage de l'application : Initialisation de la base de données
     init_db()
     yield
-    # Action à l'arrêt de l'application (rien de particulier pour le moment)
+    # Action à l'arrêt de l'application
     pass
 
 app = FastAPI(
@@ -18,6 +19,10 @@ app = FastAPI(
     lifespan=lifespan,
     debug=settings.DEBUG
 )
+
+@app.get("/", tags=["Welcome"])
+def welcome():
+    return {"message": "Bienvenue sur l'API de Chat en temps réel!"}
 
 @app.get("/health", tags=["Healthcheck"])
 def health_check():
@@ -30,3 +35,6 @@ def health_check():
         "app_name": settings.APP_NAME,
         "debug_mode": settings.DEBUG
     }
+
+app.include_router(users.router)
+app.include_router(rooms.router)

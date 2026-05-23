@@ -3,8 +3,9 @@ from jose import jwt, JWTError
 from passlib.context import CryptContext
 from app.config import settings
 
-# Contexte de hachage pour les mots de passe (algorithme bcrypt)
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Contexte de hachage pour les mots de passe
+# Utiliser `pbkdf2_sha256` évite la limite de 72 bytes de bcrypt
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
