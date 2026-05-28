@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from app.models.room import Room, RoomAdmin, RoomType
+from app.models.room import Room, RoomAdmin, RoomType, room_members
 from app.models.user import User
 from app.schemas.room import RoomCreate
 
@@ -14,6 +14,19 @@ def get_room_by_name(db: Session, name: str) -> Room | None:
 
 def get_rooms(db: Session, skip: int = 0, limit: int = 100) -> list[Room]:
     return db.query(Room).offset(skip).limit(limit).all()
+
+
+def get_rooms_for_user(db: Session, user_id: int, skip: int = 0, limit: int = 100) -> list[Room]:
+    return (
+        db.query(Room)
+        .outerjoin(room_members, (room_members.c.room_id == Room.id) & (room_members.c.user_id == user_id))
+        .filter(
+            (Room.room_type != RoomType.PRIVATE) | (room_members.c.user_id.isnot(None))
+        )
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
 def create_room(db: Session, room: RoomCreate, creator_id: int) -> Room:

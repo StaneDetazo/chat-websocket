@@ -46,6 +46,8 @@ def suspend_user(
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
     if user.id == current_user.id:
         raise HTTPException(status_code=400, detail="Vous ne pouvez pas suspendre votre propre compte")
+    if not user.is_active:
+        raise HTTPException(status_code=400, detail=f"L'utilisateur '{user.username}' est déjà suspendu")
     user.is_active = False
     db.commit()
     return {"message": f"L'utilisateur '{user.username}' a été suspendu"}
@@ -61,6 +63,8 @@ def reactivate_user(
     user = get_user(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    if user.is_active:
+        raise HTTPException(status_code=400, detail=f"L'utilisateur '{user.username}' est déjà actif")
     user.is_active = True
     db.commit()
     return {"message": f"L'utilisateur '{user.username}' a été réactivé"}
@@ -74,7 +78,11 @@ def create_room_admin(
 ):
     check_admin(current_user)
     try:
-        return create_room(db=db, room=room, creator_id=current_user.id)
+        db_room = create_room(db=db, room=room, creator_id=current_user.id)
+        resp = RoomResponse.model_validate(db_room)
+        resp.member_count = len(db_room.members)
+        resp.admin_ids = [a.user_id for a in db_room.admins]
+        return resp
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -113,7 +121,7 @@ def remove_room(
     return {"message": "Salon supprimé avec succès"}
 
 
-@router.post("/warnings", response_model=WarningResponse)
+@router.post("/warnings", response_model=WarningResponse, include_in_schema=False)
 def warn_user(
     req: WarningCreate,
     db: Session = Depends(get_db),
@@ -130,7 +138,7 @@ def warn_user(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/warnings/user/{user_id}", response_model=list[WarningResponse])
+@router.get("/warnings/user/{user_id}", response_model=list[WarningResponse], include_in_schema=False)
 def list_user_warnings(
     user_id: int,
     db: Session = Depends(get_db),
@@ -140,7 +148,7 @@ def list_user_warnings(
     return get_user_warnings(db, user_id)
 
 
-@router.get("/warnings/room/{room_id}", response_model=list[WarningResponse])
+@router.get("/warnings/room/{room_id}", response_model=list[WarningResponse], include_in_schema=False)
 def list_room_warnings(
     room_id: int,
     db: Session = Depends(get_db),

@@ -9,9 +9,7 @@ from app.models.user import User
 from app.models.room import Room, RoomType
 from app.crud.message import create_message, MAX_MESSAGE_LENGTH
 from app.schemas.message import MessageCreate
-
-RATE_LIMIT_MESSAGES = 10
-RATE_LIMIT_WINDOW = 10
+from app.config import settings
 
 class ConnectionManager:
     def __init__(self):
@@ -23,9 +21,9 @@ class ConnectionManager:
     def _check_rate_limit(self, user_id: int) -> bool:
         now = time.time()
         times = self.user_message_times[user_id]
-        times = [t for t in times if now - t < RATE_LIMIT_WINDOW]
+        times = [t for t in times if now - t < settings.WS_RATE_LIMIT_WINDOW_SECONDS]
         self.user_message_times[user_id] = times
-        if len(times) >= RATE_LIMIT_MESSAGES:
+        if len(times) >= settings.WS_RATE_LIMIT_MESSAGES:
             return False
         times.append(now)
         return True

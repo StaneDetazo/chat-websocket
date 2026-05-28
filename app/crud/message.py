@@ -1,8 +1,8 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, exists
 from datetime import datetime, timezone
 from app.models.message import Message
-from app.models.room import Room
+from app.models.room import Room, room_members
 from app.schemas.message import MessageCreate, MessageUpdate
 
 MAX_MESSAGE_LENGTH = 2000
@@ -17,6 +17,15 @@ def create_message(db: Session, message: MessageCreate, sender_id: int) -> Messa
             raise ValueError("Salon introuvable")
         if room.room_type.value == "readonly":
             raise ValueError("Ce salon est en lecture seule. Vous ne pouvez pas y écrire.")
+
+        is_member = db.query(
+            exists().where(
+                room_members.c.user_id == sender_id,
+                room_members.c.room_id == message.room_id
+            )
+        ).scalar()
+        if not is_member:
+            raise ValueError("Vous devez être membre du salon pour y écrire")
 
     db_message = Message(
         sender_id=sender_id,
@@ -33,6 +42,30 @@ def create_message(db: Session, message: MessageCreate, sender_id: int) -> Messa
 
 def get_message(db: Session, message_id: int) -> Message | None:
     return db.query(Message).filter(Message.id == message_id).first()
+
+
+def get_all_messages(
+    db: Session, user_id: int, skip: int = 0, limit: int = 100
+) -> list[Message]:
+    user_room_ids = [
+        r.id for r in db.query(Room).join(Room.members).filter(Room.members.any(id=user_id)).all()
+    ]
+    return (
+        db.query(Message)
+        .filter(
+            Message.is_deleted == False,
+            or_(
+                Message.room_id.in_(user_room_ids),
+                (Message.is_private == True) & (
+                    (Message.sender_id == user_id) | (Message.receiver_id == user_id)
+                )
+            )
+        )
+        .order_by(Message.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
 def get_room_messages(
@@ -96,6 +129,8 @@ def update_message(db: Session, message_id: int, user_id: int, message_update: M
     db_message = db.query(Message).filter(Message.id == message_id).first()
     if not db_message:
         return None
+    if db_message.is_deleted:
+        raise ValueError("Ce message a été supprimé et ne peut plus être modifié")
     if db_message.sender_id != user_id:
         raise ValueError("Vous ne pouvez modifier que vos propres messages")
     if len(message_update.content) > MAX_MESSAGE_LENGTH:

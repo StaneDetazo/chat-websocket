@@ -2,14 +2,13 @@ import time
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.api.endpoints import users, rooms, auth, messages, admin
 from app.config import settings
 from app.database import init_db
 from app.websocket.handler import handle_websocket_main
 
-RATE_LIMIT_REQUESTS = 60
-RATE_LIMIT_WINDOW = 60
 request_counts: dict[str, list[float]] = defaultdict(list)
 
 
@@ -28,15 +27,22 @@ app = FastAPI(
     swagger_ui_parameters={"persistAuthorization": True}
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
     times = request_counts[client_ip]
-    times = [t for t in times if now - t < RATE_LIMIT_WINDOW]
+    times = [t for t in times if now - t < settings.RATE_LIMIT_WINDOW_SECONDS]
     request_counts[client_ip] = times
-    if len(times) >= RATE_LIMIT_REQUESTS:
+    if len(times) >= settings.RATE_LIMIT_REQUESTS:
         return JSONResponse(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             content={"detail": "Trop de requêtes. Veuillez ralentir."}

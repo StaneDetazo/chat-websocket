@@ -4,11 +4,13 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.schemas.message import MessageCreate, MessageUpdate, MessageResponse, MessageSearch
 from app.crud.message import (
-    create_message, get_message, get_room_messages,
+    create_message, get_message, get_room_messages, get_all_messages,
     get_private_messages, search_messages,
     update_message, delete_message
 )
+from sqlalchemy import exists
 from app.crud.room import is_room_admin, get_room
+from app.models.room import room_members
 from app.models.user import User
 from datetime import datetime, timezone
 
@@ -28,14 +30,14 @@ def send_message(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/messages", response_model=list[MessageResponse])
+@router.get("/messages", response_model=list[MessageResponse], include_in_schema=False)
 def read_messages(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return get_room_messages(db, skip=skip, limit=limit)
+    return get_all_messages(db, user_id=current_user.id, skip=skip, limit=limit)
 
 
 @router.get("/messages/search", response_model=list[MessageResponse])
@@ -76,6 +78,12 @@ def remove_message(
     if not db_message:
         raise HTTPException(status_code=404, detail="Message introuvable")
 
+    if db_message.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ce message a déjà été supprimé"
+        )
+
     can_delete = (
         db_message.sender_id == current_user.id
         or current_user.is_admin
@@ -101,6 +109,21 @@ def read_room_messages(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    db_room = get_room(db, room_id)
+    if not db_room:
+        raise HTTPException(status_code=404, detail="Salon introuvable")
+    is_member = db.query(
+        exists().where(
+            room_members.c.user_id == current_user.id
+        ).where(
+            room_members.c.room_id == room_id
+        )
+    ).scalar()
+    if not is_member and not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Vous devez être membre du salon pour voir ses messages"
+        )
     return get_room_messages(db, room_id, skip=skip, limit=limit)
 
 

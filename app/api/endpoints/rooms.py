@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+from sqlalchemy import exists
 
 from app.database import get_db
 from app.dependencies import get_current_user
@@ -11,12 +12,13 @@ from app.schemas.room import (
 from app.schemas.user import UserResponse
 from app.schemas.warning import WarningCreate, WarningResponse
 from app.crud.room import (
-    get_room, get_rooms, create_room, delete_room,
+    get_room, get_rooms, get_rooms_for_user, create_room, delete_room,
     join_room, leave_room, get_room_members,
     is_room_admin, get_room_admins,
     add_room_member, remove_room_member,
     promote_room_admin, demote_room_admin
 )
+from app.models.room import RoomType, room_members
 from app.crud.warning import create_warning
 from app.models.user import User
 
@@ -51,6 +53,17 @@ def read_room(
     db_room = get_room(db, room_id)
     if not db_room:
         raise HTTPException(status_code=404, detail="Salon introuvable")
+
+    if db_room.room_type == RoomType.PRIVATE and not current_user.is_admin:
+        is_member = db.query(
+            exists().where(
+                room_members.c.user_id == current_user.id,
+                room_members.c.room_id == room_id
+            )
+        ).scalar()
+        if not is_member:
+            raise HTTPException(status_code=404, detail="Salon introuvable")
+
     resp = RoomResponse.model_validate(db_room)
     resp.member_count = len(db_room.members)
     resp.admin_ids = [a.user_id for a in db_room.admins]
@@ -64,7 +77,10 @@ def read_rooms(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    rooms = get_rooms(db, skip=skip, limit=limit)
+    if current_user.is_admin:
+        rooms = get_rooms(db, skip=skip, limit=limit)
+    else:
+        rooms = get_rooms_for_user(db, current_user.id, skip=skip, limit=limit)
     result = []
     for room in rooms:
         r = RoomResponse.model_validate(room)
@@ -97,9 +113,15 @@ def join_room_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    db_room = get_room(db, room_id)
+    if not db_room:
+        raise HTTPException(status_code=404, detail="Salon introuvable")
+    if db_room.room_type == RoomType.PRIVATE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Ce salon est privé. Seul un admin peut vous ajouter."
+        )
     status_result = join_room(db, room_id, current_user.id)
-    if status_result == "not_found":
-        raise HTTPException(status_code=404, detail="Salon ou utilisateur introuvable")
     if status_result == "already_member":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Vous êtes déjà membre de ce salon")
     return {"message": "Vous avez rejoint le salon avec succès"}
@@ -131,7 +153,7 @@ def room_members(
     return members
 
 
-@router.get("/{room_id}/admins", response_model=list[RoomAdminResponse])
+@router.get("/{room_id}/admins", response_model=list[RoomAdminResponse], include_in_schema=False)
 def room_admins_list(
     room_id: int,
     db: Session = Depends(get_db),
@@ -143,7 +165,7 @@ def room_admins_list(
     return get_room_admins(db, room_id)
 
 
-@router.post("/{room_id}/members")
+@router.post("/{room_id}/members", include_in_schema=False)
 def add_member(
     room_id: int,
     req: AddMemberRequest,
@@ -160,7 +182,7 @@ def add_member(
     return {"message": "Membre ajouté au salon avec succès"}
 
 
-@router.delete("/{room_id}/members/{user_id}")
+@router.delete("/{room_id}/members/{user_id}", include_in_schema=False)
 def remove_member(
     room_id: int,
     user_id: int,
@@ -179,7 +201,7 @@ def remove_member(
     return {"message": "Membre retiré du salon avec succès"}
 
 
-@router.post("/{room_id}/admins")
+@router.post("/{room_id}/admins", include_in_schema=False)
 def promote_admin(
     room_id: int,
     req: PromoteAdminRequest,
@@ -198,7 +220,7 @@ def promote_admin(
     return {"message": "Utilisateur promu admin du salon avec succès"}
 
 
-@router.delete("/{room_id}/admins/{user_id}")
+@router.delete("/{room_id}/admins/{user_id}", include_in_schema=False)
 def demote_admin(
     room_id: int,
     user_id: int,
@@ -215,7 +237,7 @@ def demote_admin(
     return {"message": "Admin rétrogradé avec succès"}
 
 
-@router.post("/{room_id}/warnings", response_model=WarningResponse)
+@router.post("/{room_id}/warnings", response_model=WarningResponse, include_in_schema=False)
 def warn_member(
     room_id: int,
     req: WarningCreate,
