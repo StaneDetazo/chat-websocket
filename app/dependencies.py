@@ -8,7 +8,7 @@ from app.security import decode_access_token
 from app.models.user import User
 
 # Définit le schéma OAuth2 avec le point de connexion de login pour l'interface Swagger
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/login")
 
 def get_db() -> Generator[Session, None, None]:
     """

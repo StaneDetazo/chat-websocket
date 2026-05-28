@@ -51,5 +51,6 @@ def init_db() -> None:
     import app.models.user
     import app.models.room
     import app.models.message
+    import app.models.warning
 
     Base.metadata.create_all(bind=engine)

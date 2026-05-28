@@ -18,10 +18,15 @@ class UserResponse(UserBase):
     Schéma pour la réponse contenant les détails d'un utilisateur.
     """
     id: int
+    is_active: bool = True
+    is_admin: bool = False
     created_at: datetime
 
-    # Configuration pour permettre l'importation depuis un objet ORM (SQLAlchemy)
     model_config = ConfigDict(from_attributes=True)
+
+class UserLogin(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=6, max_length=100)
 
 class Token(BaseModel):
     """
@@ -29,6 +34,7 @@ class Token(BaseModel):
     """
     access_token: str
     token_type: str = "bearer"
+    user: UserResponse | None = None
 
 class TokenData(BaseModel):
     """
